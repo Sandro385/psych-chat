@@ -7,10 +7,10 @@ const cors    = require('cors');
 const path    = require('path');
 const { OpenAI } = require('openai');
 
-// 2) OpenAI-ს კლიენტი (ვკითხულობთ .env-დან)
+// 2) OpenAI-ს კლიენტი (.env → OPENAI_API_KEY)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 3) შენი Assistant-ის ID (ყურადღებით!  ► ჩასვი შენივე ID)
+// 3) შენი Assistant-ის ID (შეადგენს შენივე ID-ს)
 const ASSISTANT_ID = 'asst_nZlOLl89ez21FOcMNCejGj47';
 
 // 4) Express-ის აპი
@@ -26,27 +26,27 @@ app.get('/', (_req, res) => {
 // ჩატის ენდპოინტი
 app.post('/chat', async (req, res) => {
   try {
-    /* ► front-იდან მოდის messages (array-ში role / content) */
-    const { messages } = req.body;
+    /* front-იდან მოდის messages (role / content).  
+       Threads API-ს “system” აღარ სჭირდება, მხოლოდ user/assistant. */
+    const messages = (req.body.messages || [])
+      .filter(m => m.role === 'user')              // ვიტოვებთ მხოლოდ user-ებს
+      .map   (m => ({ role: 'user', content: m.content }));
 
     /* ➊ ვქმნით სესიას (thread) */
-    const thread = await openai.beta.threads.create({
-      messages,                        // initial user messages
+    const thread = await openai.beta.threads.create({ messages });
+
+    /* ➋ ვუშვებთ ასისტენტს gpt-4o მოდელზე */
+    await openai.beta.threads.runs.createAndPoll(thread.id, {
+      assistant_id: ASSISTANT_ID,
+      model: 'gpt-4o'
     });
 
-    /* ➋ ვუშვებთ ჩვენს ასისტენტს gpt-4o მოდელზე */
-    const run = await openai.beta.threads.runs.createAndPoll(
-      thread.id,
-      { assistant_id: ASSISTANT_ID, model: 'gpt-4o' }
-    );
-
-    /* ➌ ვიღებთ საბოლოო მესიჯს */
-    const threadMessages = await openai.beta.threads.messages.list(thread.id, {
+    /* ➌ ვიღებთ ბოლოს გამოქვეყნებულ შეხვედრას */
+    const { data } = await openai.beta.threads.messages.list(thread.id, {
       limit: 1,
-      order: 'desc',
+      order: 'desc'
     });
-
-    const reply = threadMessages.data[0].content[0].text.value;
+    const reply = data[0].content[0].text.value;
 
     res.json({ role: 'assistant', content: reply });
   } catch (err) {
