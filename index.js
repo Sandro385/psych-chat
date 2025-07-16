@@ -2,6 +2,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
+const path    = require('path');          // ★ დამატებულია – HTML-ს გასაწოდებლად
 const { OpenAI } = require('openai');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -10,13 +11,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// POST /chat  – ელოდება { messages: [...] } where messages არის ChatGPT ფორმატის მასივი
+// ფესვური URL – HTML-ფაილის მიწოდება
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ჩატის ბოლქვი
 app.post('/chat', async (req, res) => {
   try {
     const { messages } = req.body;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',       // სურვილისამებრ შეცვალეთ თქვენთვის საჭირო მოდელით
+      model: 'gpt-4o-mini',      // სურვილისამებრ შეცვალეთ თქვენთვის საჭირო მოდელით
       messages,
     });
 
