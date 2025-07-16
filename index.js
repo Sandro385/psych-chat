@@ -7,10 +7,10 @@ const cors    = require('cors');
 const path    = require('path');
 const { OpenAI } = require('openai');
 
-// 2) OpenAI-ს კლიენტი (.env → OPENAI_API_KEY)
+// 2) OpenAI-ს კლიენტი (ვკითხულობთ .env-დან)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 3) შენი Assistant-ის ID (შეადგენს შენივე ID-ს)
+// 3) შენი Assistant-ის ID (შეავსე სწორად)
 const ASSISTANT_ID = 'asst_nZlOLl89ez21FOcMNCejGj47';
 
 // 4) Express-ის აპი
@@ -26,29 +26,29 @@ app.get('/', (_req, res) => {
 // ჩატის ენდპოინტი
 app.post('/chat', async (req, res) => {
   try {
-    /* front-იდან მოდის messages (role / content).  
-       Threads API-ს “system” აღარ სჭირდება, მხოლოდ user/assistant. */
-    const messages = (req.body.messages || [])
-      .filter(m => m.role === 'user')              // ვიტოვებთ მხოლოდ user-ებს
-      .map   (m => ({ role: 'user', content: m.content }));
+    /* ► front-იდან მოდის messages (array-ში role / content) */
+    const { messages } = req.body;
 
     /* ➊ ვქმნით სესიას (thread) */
     const thread = await openai.beta.threads.create({ messages });
 
-    /* ➋ ვუშვებთ ასისტენტს gpt-4o მოდელზე */
+    /* ➋ ვუშვებთ ასისტენტს gpt-4o მოდელზე
+          – response_format: { type: "text" } → citations აღარ დაემატება */
     await openai.beta.threads.runs.createAndPoll(thread.id, {
       assistant_id: ASSISTANT_ID,
-      model: 'gpt-4o'
+      model: 'gpt-4o',
+      response_format: { type: 'text' }
     });
 
-    /* ➌ ვიღებთ ბოლოს გამოქვეყნებულ შეხვედრას */
-    const { data } = await openai.beta.threads.messages.list(thread.id, {
+    /* ➌ ვიღებთ ბოლო პასუხს */
+    const threadMessages = await openai.beta.threads.messages.list(thread.id, {
       limit: 1,
-      order: 'desc'
+      order: 'desc',
     });
-    const reply = data[0].content[0].text.value;
 
+    const reply = threadMessages.data[0].content[0].text.value;
     res.json({ role: 'assistant', content: reply });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'OpenAI request failed' });
